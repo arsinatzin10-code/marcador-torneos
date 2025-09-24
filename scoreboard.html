@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Marcador - Stream</title>
+<style>
+  /* Estilo simple y legible para OBS */
+  html,body{height:100%;margin:0;background:transparent;font-family:Arial, Helvetica, sans-serif}
+  .wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%}
+  .teams{display:flex;gap:40px;align-items:center}
+  .team{display:flex;flex-direction:column;align-items:center;min-width:200px}
+  .name{font-size:36px;letter-spacing:1px;text-transform:uppercase}
+  .score{font-size:120px;font-weight:700}
+  .info{margin-top:10px;font-size:20px;opacity:0.9}
+  /* pequeña animación al cambiar score */
+  .flash{animation: flash 0.5s}
+  @keyframes flash{from{transform:scale(1.05)}to{transform:scale(1)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="teams">
+    <div class="team">
+      <div id="teamA" class="name">Equipo A</div>
+      <div id="scoreA" class="score">0</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;align-items:center">
+      <div id="round" class="info">Round</div>
+      <div id="note" class="info"></div>
+    </div>
+
+    <div class="team">
+      <div id="teamB" class="name">Equipo B</div>
+      <div id="scoreB" class="score">0</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/*
+  Instrucciones: reemplaza SHEET_ID por el ID de tu Google Sheet.
+  El fetch hace uso del endpoint "gviz/tq?tqx=out:json" y se parsea.
+*/
+const SHEET_ID = "1JzT-UivJgfgaNgbbiNZZS1biXh2VpszvTvSfIQDP57U";
+const SHEET_NAME = "Sheet1"; // cambia si tu pestaña se llama diferente
+const URL = https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)};
+
+let lastValues = {};
+
+function parseGvizJson(text) {
+  // Google devuelve algo como: /*O_o*/\ngoogle.visualization.Query.setResponse({...});
+  const jsonText = text.substring(text.indexOf('{'), text.lastIndexOf('}')+1);
+  return JSON.parse(jsonText);
+}
+
+async function fetchSheet() {
+  try {
+    const res = await fetch(URL, {cache: "no-store"});
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const text = await res.text();
+    const j = parseGvizJson(text);
+    const cols = j.table.cols.map(c => c.label);
+    const row = (j.table.rows[0] && j.table.rows[0].c) || [];
+    const data = {};
+    for (let i=0;i<cols.length;i++){
+      data[cols[i]] = row[i] && row[i].v !== null ? String(row[i].v) : "";
+    }
+    return data;
+  } catch (err) {
+    console.error("Error fetchSheet:", err);
+    return null;
+  }
+}
+
+function updateDOM(data) {
+  if(!data) return;
+  const map = {
+    teamA: 'teamA',
+    teamB: 'teamB',
+    scoreA: 'scoreA',
+    scoreB: 'scoreB',
+    round: 'round',
+    note: 'note'
+  };
+
+  Object.keys(map).forEach(key=>{
+    if(data[key] === undefined) return;
+    const el = document.getElementById(map[key]);
+    if(!el) return;
+    if(el.innerText !== data[key]) {
+      el.innerText = data[key];
+      // efecto si es score
+      if(key === 'scoreA' || key === 'scoreB'){
+        el.classList.remove('flash');
+        void el.offsetWidth;
+        el.classList.add('flash');
+      }
+    }
+  });
+}
+
+async function poll() {
+  const data = await fetchSheet();
+  if(data) {
+    updateDOM(data);
+    lastValues = data;
+  }
+}
+
+// arranque
+poll();
+setInterval(poll, 4000); // cada 4s (ajusta si quieres más/menos)
+</script>
+</body>
+</html>
