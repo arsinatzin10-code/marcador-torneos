@@ -1,117 +1,102 @@
-<!doctype html>
-<html lang="es">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Marcador - Stream</title>
-<style>
-  /* Estilo simple y legible para OBS */
-  html,body{height:100%;margin:0;background:transparent;font-family:Arial, Helvetica, sans-serif}
-  .wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%}
-  .teams{display:flex;gap:40px;align-items:center}
-  .team{display:flex;flex-direction:column;align-items:center;min-width:200px}
-  .name{font-size:36px;letter-spacing:1px;text-transform:uppercase}
-  .score{font-size:120px;font-weight:700}
-  .info{margin-top:10px;font-size:20px;opacity:0.9}
-  /* pequeña animación al cambiar score */
-  .flash{animation: flash 0.5s}
-  @keyframes flash{from{transform:scale(1.05)}to{transform:scale(1)}}
-</style>
+  <meta charset="UTF-8">
+  <title>Marcador</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: transparent; /* Para OBS */
+      text-align: center;
+      padding: 20px;
+    }
+
+    #marcador {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 40px; /* espacio entre los dos equipos */
+      font-size: 28px;
+    }
+
+    .equipo {
+      display: flex;
+      align-items: center;
+    }
+
+    .nombre {
+      background-color: #000;
+      color: #fff;
+      padding: 10px 25px;
+      font-weight: bold;
+      text-align: center;
+      min-width: 150px;
+    }
+
+    .puntos {
+      padding: 10px 20px;
+      font-weight: bold;
+      color: #fff;
+      font-size: 28px;
+      min-width: 60px;
+      text-align: center;
+    }
+
+    .puntos.azul { background-color: #007bff; }
+    .puntos.rojo { background-color: #ff3b3b; }
+
+    button {
+      margin-top: 20px;
+      padding: 8px 12px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+  </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="teams">
-    <div class="team">
-      <div id="teamA" class="name">Equipo A</div>
-      <div id="scoreA" class="score">0</div>
+
+  <div id="marcador">
+    <!-- Equipo A: puntaje azul a la derecha -->
+    <div class="equipo">
+      <div class="nombre" id="equipoA">Equipo A</div>
+      <div class="puntos azul" id="puntosA">0</div>
     </div>
 
-    <div style="display:flex;flex-direction:column;align-items:center">
-      <div id="round" class="info">Round</div>
-      <div id="note" class="info"></div>
-    </div>
-
-    <div class="team">
-      <div id="teamB" class="name">Equipo B</div>
-      <div id="scoreB" class="score">0</div>
+    <!-- Equipo B: puntaje rojo a la izquierda -->
+    <div class="equipo">
+      <div class="puntos rojo" id="puntosB">0</div>
+      <div class="nombre" id="equipoB">Equipo B</div>
     </div>
   </div>
-</div>
+
+  <button id="reload">Actualizar ahora</button>
 
 <script>
-/*
-  Instrucciones: reemplaza SHEET_ID por el ID de tu Google Sheet.
-  El fetch hace uso del endpoint "gviz/tq?tqx=out:json" y se parsea.
-*/
-const SHEET_ID = "1JzT-UivJgfgaNgbbiNZZS1biXh2VpszvTvSfIQDP57U";
-const SHEET_NAME = "Sheet1"; // cambia si tu pestaña se llama diferente
-const URL = https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)};
+  const URL = "https://script.google.com/macros/s/AKfycbzbL_Riw9TRkF9ZzJGI9O756SxkgQSv_HGFSLisJ1YqZ2Z2o7MYocVTG7VA8_S2Uj3Z/exec"; // tu URL de Apps Script
 
-let lastValues = {};
+  async function fetchData(){
+    try {
+      const res = await fetch(URL + '?_=' + Date.now(), { cache: 'no-store' });
+      if(!res.ok) throw new Error(res.status + ' ' + res.statusText);
+      const data = await res.json();
 
-function parseGvizJson(text) {
-  // Google devuelve algo como: /*O_o*/\ngoogle.visualization.Query.setResponse({...});
-  const jsonText = text.substring(text.indexOf('{'), text.lastIndexOf('}')+1);
-  return JSON.parse(jsonText);
-}
+      const row = data[0]; 
+      document.getElementById('equipoA').textContent = row.teamA;
+      document.getElementById('puntosA').textContent = row.scoreA;
+      document.getElementById('equipoB').textContent = row.teamB;
+      document.getElementById('puntosB').textContent = row.scoreB;
 
-async function fetchSheet() {
-  try {
-    const res = await fetch(URL, {cache: "no-store"});
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const text = await res.text();
-    const j = parseGvizJson(text);
-    const cols = j.table.cols.map(c => c.label);
-    const row = (j.table.rows[0] && j.table.rows[0].c) || [];
-    const data = {};
-    for (let i=0;i<cols.length;i++){
-      data[cols[i]] = row[i] && row[i].v !== null ? String(row[i].v) : "";
+    } catch(err){
+      console.error(err);
+      document.getElementById('puntosA').textContent = "-";
+      document.getElementById('puntosB').textContent = "-";
     }
-    return data;
-  } catch (err) {
-    console.error("Error fetchSheet:", err);
-    return null;
   }
-}
 
-function updateDOM(data) {
-  if(!data) return;
-  const map = {
-    teamA: 'teamA',
-    teamB: 'teamB',
-    scoreA: 'scoreA',
-    scoreB: 'scoreB',
-    round: 'round',
-    note: 'note'
-  };
-
-  Object.keys(map).forEach(key=>{
-    if(data[key] === undefined) return;
-    const el = document.getElementById(map[key]);
-    if(!el) return;
-    if(el.innerText !== data[key]) {
-      el.innerText = data[key];
-      // efecto si es score
-      if(key === 'scoreA' || key === 'scoreB'){
-        el.classList.remove('flash');
-        void el.offsetWidth;
-        el.classList.add('flash');
-      }
-    }
-  });
-}
-
-async function poll() {
-  const data = await fetchSheet();
-  if(data) {
-    updateDOM(data);
-    lastValues = data;
-  }
-}
-
-// arranque
-poll();
-setInterval(poll, 4000); // cada 4s (ajusta si quieres más/menos)
+  document.getElementById('reload').addEventListener('click', fetchData);
+  setInterval(fetchData, 5000);
+  fetchData();
 </script>
 </body>
 </html>
